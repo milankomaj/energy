@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Energy Dashboard</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.js"></script>
+
+<!-- annotation plugin -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+
+<style>
+:root{
+    --bg:#0f172a;
+    --card:#1e293b;
+    --text:#f8fafc;
+    --muted:#94a3b8;
+    --spot:#38bdf8;
+    --fix:#f59e0b;
+    --vykup:#10b981;
+}
+
+body{
+    margin:0;
+    font-family:system-ui;
+    background:var(--bg);
+    color:var(--text);
+    padding:20px;
+}
+
+.container{max-width:1200px;margin:auto;}
+
+header{
+    border-bottom:1px solid #334155;
+    margin-bottom:20px;
+    padding-bottom:10px;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:20px;
+}
+
+@media(min-width:900px){
+    .grid{grid-template-columns:2fr 1fr;}
+}
+
+.card{
+    background:var(--card);
+    padding:15px;
+    border-radius:12px;
+    border:1px solid #334155;
+}
+
+.card-title{
+    font-size:16px;
+    margin-bottom:10px;
+    border-bottom:1px solid #334155;
+    padding-bottom:6px;
+}
+
+.kpi-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:15px;
+    margin-bottom:20px;
+}
+
+.ai-block{
+    border-left:4px solid var(--spot);
+    padding:10px;
+    margin-bottom:10px;
+    background:#1e293b;
+    border-radius:6px;
+}
+
+.ai-block.success{border-color:#10b981;}
+.ai-block.warning{border-color:#f59e0b;}
+.ai-block.danger{border-color:#ef4444;}
+
+canvas{
+    max-width:100%;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<header>
+<h1>Smart Energy Dashboard</h1>
+<div id="dashboard-meta">Načítavam...</div>
+</header>
+
+<div class="kpi-grid">
+
+<div class="card">
+<div class="card-title">Najlacnejší úsek SPOT</div>
+<div id="kpi-lacny"></div>
+</div>
+
+<div class="card">
+<div class="card-title">Najdrahší úsek SPOT</div>
+<div id="kpi-drahy"></div>
+</div>
+
+<div class="card">
+<div class="card-title">Priemerná SPOT</div>
+<div id="kpi-spot"></div>
+</div>
+
+</div>
+
+<div class="grid">
+
+<div class="card">
+<div class="card-title">Ceny elektriny</div>
+<canvas id="energyChart"></canvas>
+</div>
+
+<div class="card">
+<div class="card-title">AI analýza</div>
+<div id="ai-container"></div>
+</div>
+
+</div>
+
+</div>
+
+<script>
+async function loadDashboardData(){
+
+const resEnergia = await fetch('energia.json');
+const resAI = await fetch('ai.json');
+
+const dataEnergia = await resEnergia.json();
+const dataAI = await resAI.json();
+
+document.getElementById('dashboard-meta').innerText =
+`deň: ${dataEnergia.kontext.datum} |`;  // energopomoc: ${dataEnergia.kontext.energopomoc ? 'AKTÍVNA':'NEAKTÍVNA'};
+
+// KPI
+document.getElementById('kpi-lacny').innerHTML =
+`${dataEnergia.priemer.najlacnejsi_usek.cas}<br>${dataEnergia.priemer.najlacnejsi_usek.koncova_cena_s_dph} €/kWh`;
+
+document.getElementById('kpi-drahy').innerHTML =
+`${dataEnergia.priemer.najdrahsi_usek.cas}<br>${dataEnergia.priemer.najdrahsi_usek.koncova_cena_s_dph} €/kWh`;
+
+document.getElementById('kpi-spot').innerText =
+dataEnergia.priemer.denny_priemer_spot_koncova_cena_s_dph + " €/kWh";
+
+// DATA
+const labels = dataEnergia.hodinovy_prehlad.map(h=>h.hodina);
+const spot = dataEnergia.hodinovy_prehlad.map(h=>h.spot_spolu_koncova_cena_s_dph);
+const zse = dataEnergia.hodinovy_prehlad.map(h=>h.zse_spolu_koncova_cena_s_dph);
+const vykup = dataEnergia.hodinovy_prehlad.map(h=>h.vykup_cena_kwh_bez_dph);
+
+// GRAPH
+new Chart(document.getElementById('energyChart'),{
+type:'line',
+data:{
+labels,
+datasets:[
+{
+label:'SPOT',
+data:spot,
+borderColor:'#38bdf8',
+fill:true
+},
+{
+label:'FIX',
+data:zse,
+borderColor:'#f59e0b',
+borderDash:[5,5]
+},
+{
+label:'VÝKUP',
+data:vykup,
+borderColor:'#10b981',
+fill:false
+}
+]
+},
+options:{
+responsive:true,
+plugins:{
+legend:{labels:{color:'#f8fafc'}},
+annotation:{
+annotations:{
+zeroLine:{
+type:'line',
+yMin:0,
+yMax:0,
+borderColor:'#ef4444',
+borderWidth:1,
+borderDash:[6,6],
+label:{display:false}
+}
+}
+}
+},
+scales:{
+x:{ticks:{color:'#94a3b8'}},
+y:{
+ticks:{color:'#94a3b8'},
+grid:{color:'#334155'}
+}
+}
+}
+});
+
+// AI
+document.getElementById('ai-container').innerHTML = `
+<div class="ai-block warning">
+<div>Prehľad</div>
+${dataAI.uvod}
+</div>
+
+<div class="ai-block success">
+<div>Najlacnejší čas</div>
+${dataAI.najlacnejsia}
+</div>
+
+<div class="ai-block danger">
+<div>Najdrahší čas</div>
+${dataAI.najdrahsia}
+</div>
+
+<div class="ai-block">
+<div>Odporúčanie</div>
+${dataAI.odporucanie}
+</div>
+`;
+
+}
+
+window.onload = loadDashboardData;
+</script>
+
+</body>
+</html>

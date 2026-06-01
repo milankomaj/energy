@@ -1,0 +1,49 @@
+name: energy
+
+on:
+  schedule:
+    - cron: '30 15 * * *' #  UTC
+  workflow_dispatch:      # Umožní vám spustiť aktualizáciu aj manuálne tlačidlom
+
+permissions:
+  contents: read          # Stačí len čítanie kódu, žiadny zápis/commit sa nedeje
+  pages: write            # Povolenie na aktualizáciu GitHub Pages
+  id-token: write         # Vyžadované pre bezpečné nasadenie
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{secrets.CLOUDFLARE_ACCOUNT_ID}}
+      CLOUDFLARE_EMAIL: ${{secrets.CLOUDFLARE_EMAIL}}
+      CLOUDFLARE_API_TOKEN: ${{secrets.CLOUDFLARE_API_TOKEN}}
+
+
+    steps:
+    - name: Stiahnutie zdrojového kódu
+      uses: actions/checkout@v4
+
+    - name: Vygenerovanie nového JSON súboru
+      run: |
+        echo -e "\033[31;1m Chmod \033[0m"
+        chmod +x ./spot_zse/energia.sh
+        echo -e "\033[31;1m energia.sh \033[0m"
+        ./spot_zse/energia.sh
+        tree -h ${{ github.workspace }}
+
+
+        #
+        # Súbor sa vytvorí iba dočasne v pamäti tohto servera
+        #
+
+    - name: Nahratie webu do dočasného balíčka
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: './docs' # Zbalí celý priečinok vrátane novo vytvoreného data.json
+
+    - name: Priamy deploy na GitHub Pages (Bez commitu)
+      id: deployment
+      uses: actions/deploy-pages@v4
